@@ -26,8 +26,9 @@ max_hold_button = QtWidgets.QPushButton("Включить Max Hold")
 max_hold_button.setCheckable(True)
 buttons_layout.addWidget(max_hold_button)
 
-waterfall_button = QtWidgets.QPushButton("Включить Waterfall")
+waterfall_button = QtWidgets.QPushButton("Выключить Waterfall")  # Текст изменен на "Выключить"
 waterfall_button.setCheckable(True)
+waterfall_button.setChecked(True)  # Устанавливаем состояние "нажата"
 buttons_layout.addWidget(waterfall_button)
 
 # Основной график спектра
@@ -44,15 +45,15 @@ waterfall_plot.setLabel('bottom', 'Частота', units='Hz')
 waterfall_plot.setLabel('left', 'Время', units='с')
 waterfall_image = ImageItem()
 waterfall_plot.addItem(waterfall_image)
-waterfall_plot.hide()  # Скрываем изначально
+#waterfall_plot.hide()  # Скрываем изначально
 
 # Настройка цветовой карты для водопада
 colormap = pg.colormap.get('viridis')
 waterfall_image.setLookupTable(colormap.getLookupTable())
 
 # Фиксированный диапазон частот
-start_freq = 1e9  # 1 ГГц
-end_freq = 6e9  # 6 ГГц
+start_freq = 80e6  # 1 ГГц
+end_freq = 6000e6  # 6 ГГц
 frequencies = np.linspace(start_freq, end_freq, 1000)
 powers = np.zeros_like(frequencies)
 max_hold_powers = np.full_like(frequencies, -np.inf)
