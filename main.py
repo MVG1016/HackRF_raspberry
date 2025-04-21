@@ -73,7 +73,7 @@ powers = np.zeros_like(frequencies)
 max_hold_powers = np.full_like(frequencies, -np.inf)
 
 # Водопад
-waterfall_history = 100
+waterfall_history = 500
 waterfall_data = np.zeros((waterfall_history, len(frequencies)))
 waterfall_ptr = 0
 
@@ -93,6 +93,34 @@ max_hold_marker.hide()
 max_hold_active = False
 waterfall_active = True
 
+
+# Текстовый элемент для отображения информации о курсоре
+cursor_info = pg.TextItem(anchor=(0.5, 0), color='w')
+plot.addItem(cursor_info)
+
+# Функция для обновления текста в зависимости от позиции курсора
+def update_cursor_info(event):
+    # Получаем координаты курсора на графике
+    pos = plot.vb.mapSceneToView(event)  # Преобразуем координаты из сцены в область графика
+
+    # Вычисляем индекс ближайшей частоты
+    if start_freq <= pos.x() <= end_freq:
+        index = int((pos.x() - start_freq) / (end_freq - start_freq) * len(frequencies))
+        if 0 <= index < len(frequencies):
+            # Получаем частоту и мощность на этой частоте
+            freq = frequencies[index]
+            power = powers[index]
+
+            # Обновляем текст с частотой и мощностью
+            cursor_info.setText(f"Частота: {freq / 1e6:.2f} MHz\nМощность: {power:.2f} dB")
+            cursor_info.setPos(freq, power)
+        else:
+            cursor_info.setText("")
+    else:
+        cursor_info.setText("")
+
+# Подключаем обработчик события движения мыши
+plot.scene().sigMouseMoved.connect(update_cursor_info)
 
 def toggle_max_hold(checked):
     global max_hold_active
