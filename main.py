@@ -8,6 +8,7 @@ from pyqtgraph import ImageItem
 IP = '0.0.0.0'
 PORT = 5000
 
+
 # Создание приложения
 app = QtWidgets.QApplication([])
 win = QtWidgets.QWidget()
@@ -59,6 +60,7 @@ max_hold_curve = plot.plot(pen='r')
 
 plot.setLabel('bottom', 'Частота', units='Hz')
 plot.setLabel('left', 'Мощность', units='dB')
+
 
 # Водопадный дисплей
 waterfall_plot = graphics_layout.addPlot(title="Waterfall", row=1, col=0)
@@ -170,7 +172,35 @@ smooth_button.toggled.connect(toggle_smoothing)
 # Установка начального уровня чувствительности
 update_waterfall_levels(sensitivity_slider.value())
 
+# Текстовый элемент для отображения информации о курсоре
+cursor_info = pg.TextItem(anchor=(0.5, 0), color='w')
+plot.addItem(cursor_info)
 
+# Функция для обновления текста в зависимости от позиции курсора
+def update_cursor_info(event):
+    # Получаем координаты курсора на графике
+    pos = plot.vb.mapSceneToView(event)  # Преобразуем координаты из сцены в область графика
+
+    # Вычисляем индекс ближайшей частоты
+    if start_freq <= pos.x() <= end_freq:
+        index = int((pos.x() - start_freq) / (end_freq - start_freq) * len(frequencies))
+        if 0 <= index < len(frequencies):
+            # Получаем частоту и мощность на этой частоте
+            freq = frequencies[index]
+            power = powers[index]
+
+            # Обновляем текст с частотой и мощностью
+            cursor_info.setText(f"Частота: {freq / 1e6:.2f} MHz\nМощность: {power:.2f} dB")
+            cursor_info.setPos(freq, power)
+        else:
+            cursor_info.setText("")
+    else:
+        cursor_info.setText("")
+
+# Подключаем обработчик события движения мыши
+plot.scene().sigMouseMoved.connect(update_cursor_info)
+
+# Функция обновления графика
 def update_plot():
     global waterfall_ptr
 
