@@ -9,5 +9,5 @@ Then run this python script, after that run this command in raspberry (for examp
 hackrf_sweep -f 100:6000 -w 1000000 -l 20 -g 20 -N 1000 | nc 'IP of server/laptop' 5000
 ```
 
-![img.png](img.png)
+![img_2.png](img_2.png)
 ![img_1.png](img_1.png)
