@@ -31,6 +31,11 @@ waterfall_button.setCheckable(True)
 waterfall_button.setChecked(True)
 buttons_layout.addWidget(waterfall_button)
 
+# Кнопка для включения/выключения сглаживания
+smooth_button = QtWidgets.QPushButton("Включить Сглаживание")
+smooth_button.setCheckable(True)
+buttons_layout.addWidget(smooth_button)
+
 # Слайдер чувствительности водопада
 sensitivity_layout = QtWidgets.QHBoxLayout()
 layout.addLayout(sensitivity_layout)
@@ -92,36 +97,24 @@ max_hold_marker.hide()
 # Флаги
 max_hold_active = False
 waterfall_active = True
+smooth_active = False  # Флаг для сглаживания
+
+# Функция для сглаживания данных (например, скользящее среднее)
+def smooth_data(data, window_size=5):
+    # Если размер окна больше длины данных, возвращаем данные без изменений
+    if len(data) <= window_size:
+        return data
+
+    # Зеркальное дополнение данных для обработки краев
+    padded_data = np.pad(data, (window_size // 2, window_size // 2), mode='reflect')
+
+    # Применение скользящего среднего
+    smoothed = np.convolve(padded_data, np.ones(window_size) / window_size, mode='valid')
+
+    return smoothed
 
 
-# Текстовый элемент для отображения информации о курсоре
-cursor_info = pg.TextItem(anchor=(0.5, 0), color='w')
-plot.addItem(cursor_info)
-
-# Функция для обновления текста в зависимости от позиции курсора
-def update_cursor_info(event):
-    # Получаем координаты курсора на графике
-    pos = plot.vb.mapSceneToView(event)  # Преобразуем координаты из сцены в область графика
-
-    # Вычисляем индекс ближайшей частоты
-    if start_freq <= pos.x() <= end_freq:
-        index = int((pos.x() - start_freq) / (end_freq - start_freq) * len(frequencies))
-        if 0 <= index < len(frequencies):
-            # Получаем частоту и мощность на этой частоте
-            freq = frequencies[index]
-            power = powers[index]
-
-            # Обновляем текст с частотой и мощностью
-            cursor_info.setText(f"Частота: {freq / 1e6:.2f} MHz\nМощность: {power:.2f} dB")
-            cursor_info.setPos(freq, power)
-        else:
-            cursor_info.setText("")
-    else:
-        cursor_info.setText("")
-
-# Подключаем обработчик события движения мыши
-plot.scene().sigMouseMoved.connect(update_cursor_info)
-
+# Функции для кнопок
 def toggle_max_hold(checked):
     global max_hold_active
     max_hold_active = checked
@@ -158,9 +151,21 @@ def update_waterfall_levels(value):
     waterfall_image.setLevels((min_db, max_db))
 
 
+def toggle_smoothing(checked):
+    global smooth_active
+    smooth_active = checked
+
+    if smooth_active:
+        smooth_button.setText("Выключить Сглаживание")
+    else:
+        smooth_button.setText("Включить Сглаживание")
+
+
+# Подключение кнопок
 max_hold_button.toggled.connect(toggle_max_hold)
 waterfall_button.toggled.connect(toggle_waterfall)
 sensitivity_slider.valueChanged.connect(update_waterfall_levels)
+smooth_button.toggled.connect(toggle_smoothing)
 
 # Установка начального уровня чувствительности
 update_waterfall_levels(sensitivity_slider.value())
@@ -170,17 +175,23 @@ def update_plot():
     global waterfall_ptr
 
     if len(powers) > 0:
-        curve.setData(frequencies, powers)
+        # Применяем сглаживание, если оно включено
+        if smooth_active:
+            smoothed_powers = smooth_data(powers, window_size=5)  # Размер окна можно настроить
+        else:
+            smoothed_powers = powers
 
-        max_index = np.argmax(powers)
+        curve.setData(frequencies, smoothed_powers)
+
+        max_index = np.argmax(smoothed_powers)
         max_freq = frequencies[max_index]
-        max_power = powers[max_index]
+        max_power = smoothed_powers[max_index]
 
         max_marker.setText(f"Текущий макс: {max_freq / 1e6:.2f} MHz\n{max_power:.2f} dB")
         max_marker.setPos(max_freq, max_power)
 
         if max_hold_active:
-            max_hold_powers[:] = np.maximum(max_hold_powers, powers)
+            max_hold_powers[:] = np.maximum(max_hold_powers, smoothed_powers)
             max_hold_curve.setData(frequencies, max_hold_powers)
 
             max_hold_index = np.argmax(max_hold_powers)
@@ -191,7 +202,7 @@ def update_plot():
             max_hold_marker.setPos(max_hold_freq, max_hold_pwr)
 
         if waterfall_active:
-            waterfall_data[waterfall_ptr, :] = powers
+            waterfall_data[waterfall_ptr, :] = smoothed_powers
             waterfall_ptr = (waterfall_ptr + 1) % waterfall_history
 
             tr = QtGui.QTransform()
