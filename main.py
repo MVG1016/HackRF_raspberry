@@ -26,15 +26,31 @@ max_hold_button = QtWidgets.QPushButton("Включить Max Hold")
 max_hold_button.setCheckable(True)
 buttons_layout.addWidget(max_hold_button)
 
-waterfall_button = QtWidgets.QPushButton("Выключить Waterfall")  # Текст изменен на "Выключить"
+waterfall_button = QtWidgets.QPushButton("Выключить Waterfall")
 waterfall_button.setCheckable(True)
-waterfall_button.setChecked(True)  # Устанавливаем состояние "нажата"
+waterfall_button.setChecked(True)
 buttons_layout.addWidget(waterfall_button)
+
+# Слайдер чувствительности водопада
+sensitivity_layout = QtWidgets.QHBoxLayout()
+layout.addLayout(sensitivity_layout)
+
+sensitivity_label = QtWidgets.QLabel("Чувствительность (dB):")
+sensitivity_layout.addWidget(sensitivity_label)
+
+sensitivity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+sensitivity_slider.setMinimum(10)
+sensitivity_slider.setMaximum(100)
+sensitivity_slider.setValue(100)
+sensitivity_layout.addWidget(sensitivity_slider)
+
+sensitivity_value_label = QtWidgets.QLabel("-100..0 дБ")
+sensitivity_layout.addWidget(sensitivity_value_label)
 
 # Основной график спектра
 plot = graphics_layout.addPlot(title="Спектр в реальном времени", row=0, col=0)
-curve = plot.plot(pen='y')  # Желтый цвет для реального спектра
-max_hold_curve = plot.plot(pen='r')  # Красный цвет для max hold
+curve = plot.plot(pen='y')
+max_hold_curve = plot.plot(pen='r')
 
 plot.setLabel('bottom', 'Частота', units='Hz')
 plot.setLabel('left', 'Мощность', units='dB')
@@ -45,30 +61,27 @@ waterfall_plot.setLabel('bottom', 'Частота', units='Hz')
 waterfall_plot.setLabel('left', 'Время', units='с')
 waterfall_image = ImageItem()
 waterfall_plot.addItem(waterfall_image)
-#waterfall_plot.hide()  # Скрываем изначально
 
-# Настройка цветовой карты для водопада
 colormap = pg.colormap.get('viridis')
 waterfall_image.setLookupTable(colormap.getLookupTable())
 
-# Фиксированный диапазон частот
-start_freq = 80e6  # 1 ГГц
-end_freq = 6000e6  # 6 ГГц
+# Диапазон частот
+start_freq = 100e6
+end_freq = 6000e6
 frequencies = np.linspace(start_freq, end_freq, 1000)
 powers = np.zeros_like(frequencies)
 max_hold_powers = np.full_like(frequencies, -np.inf)
 
-# Настройки водопада
-waterfall_history = 100  # Количество сохраняемых спектров
+# Водопад
+waterfall_history = 100
 waterfall_data = np.zeros((waterfall_history, len(frequencies)))
 waterfall_ptr = 0
 
-# Устанавливаем диапазон частот на оси X
 plot.setXRange(start_freq, end_freq)
 waterfall_plot.setXRange(start_freq, end_freq)
 waterfall_plot.setYRange(0, waterfall_history)
 
-# Маркеры для максимальной мощности
+# Маркеры
 max_marker = pg.TextItem(anchor=(0.5, 0), color='y')
 plot.addItem(max_marker)
 
@@ -76,7 +89,7 @@ max_hold_marker = pg.TextItem(anchor=(0.5, 0), color='r')
 plot.addItem(max_hold_marker)
 max_hold_marker.hide()
 
-# Флаги состояний
+# Флаги
 max_hold_active = False
 waterfall_active = True
 
@@ -103,7 +116,6 @@ def toggle_waterfall(checked):
     if waterfall_active:
         waterfall_button.setText("Выключить Waterfall")
         waterfall_plot.show()
-        # Сброс данных водопада при включении
         waterfall_data.fill(0)
         waterfall_ptr = 0
     else:
@@ -111,15 +123,25 @@ def toggle_waterfall(checked):
         waterfall_plot.hide()
 
 
+def update_waterfall_levels(value):
+    min_db = -value
+    max_db = 0
+    sensitivity_value_label.setText(f"{min_db}..{max_db} дБ")
+    waterfall_image.setLevels((min_db, max_db))
+
+
 max_hold_button.toggled.connect(toggle_max_hold)
 waterfall_button.toggled.connect(toggle_waterfall)
+sensitivity_slider.valueChanged.connect(update_waterfall_levels)
+
+# Установка начального уровня чувствительности
+update_waterfall_levels(sensitivity_slider.value())
 
 
 def update_plot():
     global waterfall_ptr
 
     if len(powers) > 0:
-        # Обновление основного графика
         curve.setData(frequencies, powers)
 
         max_index = np.argmax(powers)
@@ -129,7 +151,6 @@ def update_plot():
         max_marker.setText(f"Текущий макс: {max_freq / 1e6:.2f} MHz\n{max_power:.2f} dB")
         max_marker.setPos(max_freq, max_power)
 
-        # Обновление max hold
         if max_hold_active:
             max_hold_powers[:] = np.maximum(max_hold_powers, powers)
             max_hold_curve.setData(frequencies, max_hold_powers)
@@ -141,28 +162,19 @@ def update_plot():
             max_hold_marker.setText(f"Max Hold: {max_hold_freq / 1e6:.2f} MHz\n{max_hold_pwr:.2f} dB")
             max_hold_marker.setPos(max_hold_freq, max_hold_pwr)
 
-        # Обновление водопада
         if waterfall_active:
-            # Добавляем новые данные
             waterfall_data[waterfall_ptr, :] = powers
             waterfall_ptr = (waterfall_ptr + 1) % waterfall_history
 
-            # Устанавливаем изображение с правильными координатами
             tr = QtGui.QTransform()
             tr.translate(start_freq, 0)
             tr.scale((end_freq - start_freq) / len(frequencies), 1)
             waterfall_image.setTransform(tr)
 
-            # Обновляем данные изображения
-            waterfall_image.setImage(waterfall_data.T,
-                                     autoLevels=False,
-                                     levels=(-100, 0))
+            waterfall_image.setImage(waterfall_data.T, autoLevels=False)
 
 
-# [Остальная часть кода остается без изменений...]
-
-
-# Слушаем соединение
+# Сокет
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.bind((IP, PORT))
 sock.listen(1)
@@ -170,12 +182,12 @@ print(f"Ожидание подключения от Raspberry Pi на {IP}:{POR
 conn, addr = sock.accept()
 print(f"Подключено: {addr}")
 
-# Таймер на обновление графика
+# Обновление графика
 timer = QtCore.QTimer()
 timer.timeout.connect(update_plot)
 timer.start(200)
 
-# Чтение потока данных
+# Чтение потока
 buffer = b''
 try:
     win.show()
@@ -212,7 +224,7 @@ try:
                             new_powers.append(db)
 
             except Exception as e:
-                print(f"Error processing line: {e}")
+                print(f"Ошибка обработки строки: {e}")
                 continue
 
         if new_frequencies:
