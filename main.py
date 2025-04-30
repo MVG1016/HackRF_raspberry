@@ -8,7 +8,6 @@ from pyqtgraph import ImageItem
 IP = '0.0.0.0'
 PORT = 5000
 
-
 # Создание приложения
 app = QtWidgets.QApplication([])
 win = QtWidgets.QWidget()
@@ -32,7 +31,6 @@ waterfall_button.setCheckable(True)
 waterfall_button.setChecked(True)
 buttons_layout.addWidget(waterfall_button)
 
-# Кнопка для включения/выключения сглаживания
 smooth_button = QtWidgets.QPushButton("Включить Сглаживание")
 smooth_button.setCheckable(True)
 buttons_layout.addWidget(smooth_button)
@@ -53,6 +51,11 @@ sensitivity_layout.addWidget(sensitivity_slider)
 sensitivity_value_label = QtWidgets.QLabel("-100..0 дБ")
 sensitivity_layout.addWidget(sensitivity_value_label)
 
+# Текст статуса подключения
+status_label = QtWidgets.QLabel("Ожидание подключения от Raspberry Pi...")
+status_label.setAlignment(QtCore.Qt.AlignCenter)
+layout.addWidget(status_label)
+
 # Основной график спектра
 plot = graphics_layout.addPlot(title="Спектр в реальном времени", row=0, col=0)
 curve = plot.plot(pen='y')
@@ -60,7 +63,6 @@ max_hold_curve = plot.plot(pen='r')
 
 plot.setLabel('bottom', 'Частота', units='Hz')
 plot.setLabel('left', 'Мощность', units='dB')
-
 
 # Водопадный дисплей
 waterfall_plot = graphics_layout.addPlot(title="Waterfall", row=1, col=0)
@@ -101,26 +103,18 @@ max_hold_active = False
 waterfall_active = True
 smooth_active = False  # Флаг для сглаживания
 
-# Функция для сглаживания данных (например, скользящее среднее)
+# Функция для сглаживания данных
 def smooth_data(data, window_size=5):
-    # Если размер окна больше длины данных, возвращаем данные без изменений
     if len(data) <= window_size:
         return data
-
-    # Зеркальное дополнение данных для обработки краев
     padded_data = np.pad(data, (window_size // 2, window_size // 2), mode='reflect')
-
-    # Применение скользящего среднего
     smoothed = np.convolve(padded_data, np.ones(window_size) / window_size, mode='valid')
-
     return smoothed
-
 
 # Функции для кнопок
 def toggle_max_hold(checked):
     global max_hold_active
     max_hold_active = checked
-
     if max_hold_active:
         max_hold_button.setText("Выключить Max Hold")
         max_hold_marker.show()
@@ -131,11 +125,9 @@ def toggle_max_hold(checked):
         max_hold_marker.hide()
         max_hold_powers[:] = -np.inf
 
-
 def toggle_waterfall(checked):
     global waterfall_active, waterfall_ptr, waterfall_data
     waterfall_active = checked
-
     if waterfall_active:
         waterfall_button.setText("Выключить Waterfall")
         waterfall_plot.show()
@@ -145,23 +137,19 @@ def toggle_waterfall(checked):
         waterfall_button.setText("Включить Waterfall")
         waterfall_plot.hide()
 
-
 def update_waterfall_levels(value):
     min_db = -value
     max_db = 0
     sensitivity_value_label.setText(f"{min_db}..{max_db} дБ")
     waterfall_image.setLevels((min_db, max_db))
 
-
 def toggle_smoothing(checked):
     global smooth_active
     smooth_active = checked
-
     if smooth_active:
         smooth_button.setText("Выключить Сглаживание")
     else:
         smooth_button.setText("Включить Сглаживание")
-
 
 # Подключение кнопок
 max_hold_button.toggled.connect(toggle_max_hold)
@@ -176,20 +164,13 @@ update_waterfall_levels(sensitivity_slider.value())
 cursor_info = pg.TextItem(anchor=(0.5, 0), color='w')
 plot.addItem(cursor_info)
 
-# Функция для обновления текста в зависимости от позиции курсора
 def update_cursor_info(event):
-    # Получаем координаты курсора на графике
-    pos = plot.vb.mapSceneToView(event)  # Преобразуем координаты из сцены в область графика
-
-    # Вычисляем индекс ближайшей частоты
+    pos = plot.vb.mapSceneToView(event)
     if start_freq <= pos.x() <= end_freq:
         index = int((pos.x() - start_freq) / (end_freq - start_freq) * len(frequencies))
         if 0 <= index < len(frequencies):
-            # Получаем частоту и мощность на этой частоте
             freq = frequencies[index]
             power = powers[index]
-
-            # Обновляем текст с частотой и мощностью
             cursor_info.setText(f"Частота: {freq / 1e6:.2f} MHz\nМощность: {power:.2f} dB")
             cursor_info.setPos(freq, power)
         else:
@@ -197,17 +178,13 @@ def update_cursor_info(event):
     else:
         cursor_info.setText("")
 
-# Подключаем обработчик события движения мыши
 plot.scene().sigMouseMoved.connect(update_cursor_info)
 
-# Функция обновления графика
 def update_plot():
     global waterfall_ptr
-
     if len(powers) > 0:
-        # Применяем сглаживание, если оно включено
         if smooth_active:
-            smoothed_powers = smooth_data(powers, window_size=5)  # Размер окна можно настроить
+            smoothed_powers = smooth_data(powers, window_size=5)
         else:
             smoothed_powers = powers
 
@@ -242,14 +219,14 @@ def update_plot():
 
             waterfall_image.setImage(waterfall_data.T, autoLevels=False)
 
-
 # Сокет
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # ВАЖНО! чтобы не было ошибки 10048
 sock.bind((IP, PORT))
 sock.listen(1)
 print(f"Ожидание подключения от Raspberry Pi на {IP}:{PORT}...")
-conn, addr = sock.accept()
-print(f"Подключено: {addr}")
+
+win.show()
 
 # Обновление графика
 timer = QtCore.QTimer()
@@ -259,7 +236,9 @@ timer.start(200)
 # Чтение потока
 buffer = b''
 try:
-    win.show()
+    conn, addr = sock.accept()
+    print(f"Подключено: {addr}")
+    status_label.setText(f"Подключено: {addr[0]}")
 
     while True:
         data = conn.recv(8192)
@@ -302,7 +281,7 @@ try:
                 if 0 <= index < len(frequencies):
                     powers[index] = power
 
-            app.processEvents()
+        app.processEvents()
 
 except KeyboardInterrupt:
     print("Остановлено пользователем")
